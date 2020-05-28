@@ -4,22 +4,239 @@ output:
   html_document:
     keep_md: true
 ---
+## Introduction
 
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+This assignment will be described in multiple parts. First the questions to be answered are:
+
+1. What is mean total number of steps taken per day?
+2. What is the average daily activity pattern?
+3. Imputing missing values
+4. Are there differences in activity patterns between weekdays and weekends?
+
+Ultimately, the next R markdown document it can be processed by knitr and be transformed into an HTML file.
+
+## Global Option
+
+The report includes the code that were used to generate the output for every question. The Global options to echo the code for every single chunk has been set to TRUE that way everyone will be able to read the code. 
+
+```{r setup, include = TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Download the data
+The next code download the files required to answer the questions. Additionally creates a folder called **Data** where the file is saved and the function **unzip()** extracts the data from the zip file.
+
+```{r downloadData}
+if(!file.exists("./Data")){
+    dir.create("./Data")
+    fileUrl <- "https://github.com/LGRIVASB/RepData_PeerAssessment1/raw/master/activity.zip"
+    download.file(fileUrl, destfile = "./Data/activity.zip")
+    
+    #UNZIP DATA
+    unzip("./Data/activity.zip", exdir = "./Data")
+}
+```
 
 ## Loading and preprocessing the data
 
+The next steps were used for loading and preprocessing the data: 
 
+### Reading file
+
+The function **read.csv()** reads the file that contains the activity data. Using the separator *','*.
+
+```{r dataFile}
+activityData <- read.csv("./Data/activity.csv", sep = ",")
+```
+
+### Exploring Data
+
+First look of the data to confirm it's dimensions and content
+
+```{r dataExploring}
+str(activityData)
+head(activityData)
+tail(activityData)
+summary(activityData$steps)
+```
+
+### Changing format type of the variable date
+
+The variable **date** were change to date format. 
+
+```{r dateFormat}
+activityData$date <- as.Date(activityData$date, "%Y-%m-%d")
+class(activityData$date)
+```
 
 ## What is mean total number of steps taken per day?
 
+To calculate the total number of steps taken per day, I used **dplyr** package to group the data by date and then filter the missing values. Finally, the variables were summarized with function *sum()*.
 
+```{r stepsPerDay, message = FALSE, warning = FALSE}
+library(dplyr)
+stepsDay <- activityData %>% group_by(date) %>% 
+            filter(!is.na(steps)) %>% 
+            summarise(totalsteps = sum(steps))
+```
+
+Next I proceeded to represent the data with a histogram
+
+```{r stepsPerDayPlot}
+hist(stepsDay$totalsteps, breaks = seq(0, 22000, by=2000), 
+            main = 'Total number of steps taken per day',
+            xlab = 'Steps taken per day',
+            col = 'gray')
+```
+
+Last I calculated the mean and the median
+
+```{r meanAndMedian}
+mean_steps_per_day <- mean(stepsDay$totalsteps)
+median_steps_per_day <- median(stepsDay$totalsteps)
+
+```
+The answers for the question are:
+
+1. The **mean** total number of steps take per day is `r format(mean_steps_per_day, nsmall = 2)`.  
+2. The **median** total number of steps take per day is `r format(median_steps_per_day, nsmall = 2)`.  
 
 ## What is the average daily activity pattern?
 
+To calculate the average of steps taken per day, I used **dplyr** package to group the data by interval and then filter the missing values. Finally, the variables were summarized with function *mean()*.
 
+```{r stepsPerInterval}
+stepsInterval <- activityData %>% group_by(interval) %>% 
+            filter(!is.na(steps)) %>% 
+            summarise(totalsteps = mean(steps))
+```
+
+Next I proceeded to create the time series plot of the 5-minute interval(x-axis) and the average number of steps taken, averaged across all days (y-axis).
+
+```{r stepsPerIntervalPlot}
+plot(stepsInterval$interval, stepsInterval$totalsteps, type = 'l', 
+            col = 'darkred', lwd = 1.8, xlab = 'Intervals', 
+            ylab = 'Avg steps per day', 
+            main = 'Daily Activity Pattern')
+```
+
+Last I calculated the interval with the most number of steps taken.
+
+```{r maxSteps}
+most_steps_on_average_interval <- stepsInterval[which.max(stepsInterval$totalsteps), ]$interval
+max_steps <- max(stepsInterval$totalsteps)
+```
+The answer for the question is:
+
+1. The **interval** with the most number of steps taken is `r format(most_steps_on_average_interval, nsmall = 2)` which has `r format(max_steps, nsmall = 2)` steps as total.
 
 ## Imputing missing values
 
+The data has a certain number of days or intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data so we need a strategy for filling in all of the missing values in the dataset. 
 
+I calculated the total number of missing values in the dataset with the next code:
+
+```{r totalMissingValues}
+total_missing_values <- sum(is.na(activityData$steps))
+```
+
+The result is `r total_missing_values`. The process to replace the missing values is with a loop that change the NA value with the mean for that 5-minute interval. And finally i saved the new dataset called **activityDataNoNA**.
+
+```{r newValues}
+activityDataNoNA <- activityData
+
+for(i in 1:length(activityDataNoNA$steps)){
+            if (is.na(activityDataNoNA$steps[i])){
+                dateValue <- activityDataNoNA$date[i]
+                activityDataNoNA$steps[i] <- filter(stepsInterval, interval == activityDataNoNA$interval[i])$totalsteps
+            }   
+}
+```
+
+There are no missing values in the new dataset. To confirm, we can use the next code:
+
+```{r newSummary}
+summary(activityDataNoNA$steps)
+```
+
+As I did to answer the first question, the new data was grouped by date and the variables were summarized with function *sum()*.
+
+```{r newStepsPerDay}
+stepsDayNoNA <- activityDataNoNA %>% group_by(date) %>% 
+            summarise(totalsteps = sum(steps))
+```
+
+The histogram for the new data is:
+
+```{r newStepsPerDayPlot}
+hist(stepsDayNoNA$totalsteps, breaks = seq(0, 22000, by=2000), 
+            main = 'Total number of steps taken per day (No missing values)',
+            xlab = 'Steps taken per day',
+            col = 'lightblue')
+```
+
+Calculated the new **mean** and the new **median**.
+
+```{r newMeanMedian}
+mean_steps_per_day_no_na <- mean(stepsDayNoNA$totalsteps)
+median_steps_per_day_no_na <- median(stepsDayNoNA$totalsteps)
+```
+
+Last, I compared the results with the original dataset.
+
+1. The **mean** changes from `r format(mean_steps_per_day, nsmall = 2)` to `r format(mean_steps_per_day_no_na, nsmall = 2)`.  
+2. The **median** changes from `r format(median_steps_per_day, nsmall = 2)` to `r format(median_steps_per_day_no_na, nsmall = 2)`. 
+
+There are **no** significant variation between the original dataset and new one.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+I created a new factor variable in the dataset that has no missing values. The variable has two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day. The function **sapply** with the conditional function **if** were coded to do the new variable.
+
+```{r weekDays}
+activityDataNoNA$Week_Days <- sapply(activityDataNoNA$date, function(x){
+            if (weekdays(x) == 'sábado' | weekdays(x) == 'domingo'){
+                    y <- 'weekend'
+            } else {
+                    y <- 'weekday'
+            }
+            y
+})
+```
+
+Then, I used **dplyr** package to group the data by **Week_Days**(New variable) and interval.
+Finally, the variables were summarized with function *mean()*.
+
+```{r activityPerWeekdays}
+activity_per_weekdays <- activityDataNoNA %>% 
+            group_by(Week_Days, interval) %>%
+            summarise(totalSteps = mean(steps))
+```
+
+Now I proceeded to make a panel plot(using **ggplo2** package) containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+```{r activityPerWeekdaysPlot}
+library(ggplot2)
+g <- ggplot(activity_per_weekdays, aes(x = interval, y = totalSteps, color = Week_Days))
+
+g + geom_line() +
+            facet_grid(Week_Days ~ ., scales = 'free') + 
+            labs(x = 'Intervals', y = 'Numbers of Steps', title = 'Activity patterns between weekdays and weekends', color = 'Type of day') + 
+            scale_color_manual(values = c('#AA4371','#5ab4ac'))
+```
+
+Now I subset the data to compare between both types of days with the **summary** function.
+
+```{r activityPerWeekdaysSummary}
+
+weekdaySummary <- subset(activityDataNoNA, Week_Days == 'weekday')
+summary(weekdaySummary$steps)
+
+weekendSummary <- subset(activityDataNoNA, Week_Days == 'weekend')
+summary(weekendSummary$steps)
+```
+
+As we can observe the median of both subsets are equal but there is a difference between the means. The average of steps taken in saturday and sunday is higher than the other days of the week.
+
